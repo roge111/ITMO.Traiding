@@ -1,0 +1,11 @@
+ktor:
+  deployment:
+    port: 8080
+  application:
+    modules:
+      - com.trading.HttpKt.configureHttp
+      - com.trading.SerializationKt.configureSerialization
+      - com.trading.WebsocketsKt.configureWebsockets
+      - com.trading.StatusPagesKt.configureStatusPages
+      - com.trading.ResourcesKt.configureResources
+      - com.trading.RoutingKt.configureRouting
