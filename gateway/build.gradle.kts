@@ -26,6 +26,17 @@ dependencies {
     implementation(ktorLibs.server.statusPages)
     implementation(ktorLibs.server.websockets)
     implementation(libs.logback.classic)
+    // Зависимости для Exposed - работа  с БД
+    implementation("org.jetbrains.exposed:exposed-core:0.56.0")
+    implementation("org.jetbrains.exposed:exposed-dao:0.56.0")
+    implementation("org.jetbrains.exposed:exposed-jdbc:0.56.0")
+    implementation("org.jetbrains.exposed:exposed-java-time:0.56.0")
+
+    //Драйвер PostgreSQL
+    implementation("org.postgresql:postgresql:42.7.1")
+
+    // Пул соединений (рекомендуется)
+    implementation("com.zaxxer:HikariCP:5.1.0")
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
