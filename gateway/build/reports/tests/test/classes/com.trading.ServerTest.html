@@ -29,7 +29,7 @@
 </td>
 <td>
 <div class="infoBox" id="failures">
-<div class="counter">0</div>
+<div class="counter">1</div>
 <p>failures</p>
 </div>
 </td>
@@ -41,7 +41,7 @@
 </td>
 <td>
 <div class="infoBox" id="duration">
-<div class="counter">1.019s</div>
+<div class="counter">1.383s</div>
 <p>duration</p>
 </div>
 </td>
@@ -50,8 +50,8 @@
 </div>
 </td>
 <td>
-<div class="infoBox success" id="successRate">
-<div class="percent">100%</div>
+<div class="infoBox failures" id="successRate">
+<div class="percent">0%</div>
 <p>successful</p>
 </div>
 </td>
@@ -61,12 +61,135 @@
 <div class="tab-container">
 <ul class="tabLinks">
 <li>
+<a href="#">Failed tests</a>
+</li>
+<li>
 <a href="#">Tests</a>
 </li>
 <li>
 <a href="#">Standard output</a>
 </li>
 </ul>
+<div class="tab">
+<h2>Failed tests</h2>
+<div class="test">
+<a name="test root endpoint"></a>
+<h3 class="failures">test root endpoint</h3>
+<span class="code">
+<pre id="test-message-test root endpoint">io.ktor.server.engine.internal.ReloadingException: Module function cannot be found for the fully qualified name 'com.trading.RegisterRoutesKt.module'
+	at app//io.ktor.server.engine.internal.CallableUtilsKt.executeModuleFunction(CallableUtils.kt:68)
+	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invokeSuspend(EmbeddedServerJvm.kt:457)
+	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer.avoidingDoubleStartupFor(EmbeddedServerJvm.kt:483)
+	at app//io.ktor.server.engine.EmbeddedServer.launchModuleByName(EmbeddedServerJvm.kt:456)
+	at app//io.ktor.server.engine.EmbeddedServer.access$launchModuleByName(EmbeddedServerJvm.kt:33)
+	at app//io.ktor.server.engine.EmbeddedServer$dynamicModule$1.invokeSuspend(EmbeddedServerJvm.kt:410)
+	at app//io.ktor.server.engine.EmbeddedServer$dynamicModule$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$dynamicModule$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.application.ApplicationModules_jvmKt$LoadSequentially$1.loadModules(ApplicationModules.jvm.kt:75)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1$1.invokeSuspend(EmbeddedServerJvm.kt:393)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1$1.invoke(EmbeddedServerJvm.kt)
+	at app//kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at app//kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturnIgnoreTimeout(Undispatched.kt:50)
+	at app//kotlinx.coroutines.TimeoutKt.setupTimeout(Timeout.kt:149)
+	at app//kotlinx.coroutines.TimeoutKt.withTimeout(Timeout.kt:44)
+	at app//kotlinx.coroutines.TimeoutKt.withTimeout-KLykuaI(Timeout.kt:72)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invokeSuspend(EmbeddedServerJvm.kt:392)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$avoidingDoubleStartup$1.invokeSuspend(EmbeddedServerJvm.kt:464)
+	at _COROUTINE._BOUNDARY._(CoroutineDebugging.kt:42)
+	at io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invokeSuspend(EmbeddedServerJvm.kt:392)
+	at io.ktor.server.engine.EmbeddedServer$avoidingDoubleStartup$1.invokeSuspend(EmbeddedServerJvm.kt:464)
+	at io.ktor.server.testing.TestApplication.start(TestApplication.kt:102)
+	at io.ktor.server.testing.client.DelegatingTestClientEngine.execute(DelegatingTestClientEngine.kt:48)
+	at io.ktor.client.engine.HttpClientEngine$executeWithinCallContext$2.invokeSuspend(HttpClientEngine.kt:183)
+	at io.ktor.client.engine.HttpClientEngine.executeWithinCallContext(HttpClientEngine.kt:184)
+	at io.ktor.client.engine.HttpClientEngine$install$1.invokeSuspend(HttpClientEngine.kt:154)
+	at io.ktor.util.pipeline.DebugPipelineContext.proceedLoop(DebugPipelineContext.kt:79)
+	at io.ktor.client.plugins.HttpSend$DefaultSender.execute(HttpSend.kt:141)
+	at io.ktor.client.plugins.HttpRedirectKt$HttpRedirect$2$1.invokeSuspend(HttpRedirect.kt:112)
+	at io.ktor.client.plugins.api.Send$install$1.invokeSuspend(CommonHooks.kt:52)
+	at io.ktor.client.plugins.HttpCallValidatorKt$HttpCallValidator$2$2.invokeSuspend(HttpCallValidator.kt:143)
+	at io.ktor.client.plugins.api.Send$install$1.invokeSuspend(CommonHooks.kt:52)
+	at io.ktor.client.plugins.HttpSend$Plugin$install$1.invokeSuspend(HttpSend.kt:107)
+	at io.ktor.util.pipeline.DebugPipelineContext.proceedLoop(DebugPipelineContext.kt:79)
+	at io.ktor.client.plugins.RequestError$install$1.invokeSuspend(HttpCallValidator.kt:165)
+	at io.ktor.util.pipeline.DebugPipelineContext.proceedLoop(DebugPipelineContext.kt:79)
+	at io.ktor.client.plugins.HttpRequestLifecycleKt$HttpRequestLifecycle$1$1.invokeSuspend(HttpRequestLifecycle.kt:29)
+	at io.ktor.client.plugins.SetupRequestContext$install$1.invokeSuspend(HttpRequestLifecycle.kt:42)
+	at io.ktor.util.pipeline.DebugPipelineContext.proceedLoop(DebugPipelineContext.kt:79)
+	at io.ktor.client.HttpClient.execute$ktor_client_core(HttpClient.kt:1415)
+	at io.ktor.client.statement.HttpStatement.fetchResponse(HttpStatement.kt:198)
+	at com.trading.ServerTest$test root endpoint$1.invokeSuspend(ServerTest.kt:31)
+	at io.ktor.server.testing.TestApplicationKt$runTestApplication$2$2.invokeSuspend(TestApplication.kt:518)
+	at io.ktor.server.testing.TestApplicationKt.runTestApplication(TestApplication.kt:518)
+	at io.ktor.server.testing.TestApplicationKt$testApplication$1.invokeSuspend(TestApplication.kt:502)
+	at io.ktor.test.dispatcher.TestCommonKt$runTestWithRealTime$1.invokeSuspend(TestCommon.kt:48)
+	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$1.invokeSuspend(TestBuilders.kt:317)
+Caused by: io.ktor.server.engine.internal.ReloadingException: Module function cannot be found for the fully qualified name 'com.trading.RegisterRoutesKt.module'
+	at app//io.ktor.server.engine.internal.CallableUtilsKt.executeModuleFunction(CallableUtils.kt:68)
+	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invokeSuspend(EmbeddedServerJvm.kt:457)
+	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer.avoidingDoubleStartupFor(EmbeddedServerJvm.kt:483)
+	at app//io.ktor.server.engine.EmbeddedServer.launchModuleByName(EmbeddedServerJvm.kt:456)
+	at app//io.ktor.server.engine.EmbeddedServer.access$launchModuleByName(EmbeddedServerJvm.kt:33)
+	at app//io.ktor.server.engine.EmbeddedServer$dynamicModule$1.invokeSuspend(EmbeddedServerJvm.kt:410)
+	at app//io.ktor.server.engine.EmbeddedServer$dynamicModule$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$dynamicModule$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.application.ApplicationModules_jvmKt$LoadSequentially$1.loadModules(ApplicationModules.jvm.kt:75)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1$1.invokeSuspend(EmbeddedServerJvm.kt:393)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1$1.invoke(EmbeddedServerJvm.kt)
+	at app//kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at app//kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturnIgnoreTimeout(Undispatched.kt:50)
+	at app//kotlinx.coroutines.TimeoutKt.setupTimeout(Timeout.kt:149)
+	at app//kotlinx.coroutines.TimeoutKt.withTimeout(Timeout.kt:44)
+	at app//kotlinx.coroutines.TimeoutKt.withTimeout-KLykuaI(Timeout.kt:72)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invokeSuspend(EmbeddedServerJvm.kt:392)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$instantiateAndConfigureApplication$1.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$avoidingDoubleStartup$1.invokeSuspend(EmbeddedServerJvm.kt:464)
+	at app//kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at app//kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at app//kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at app//kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at app//kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at app//kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at app//kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at app//kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at app//io.ktor.server.engine.EmbeddedServer.avoidingDoubleStartup(EmbeddedServerJvm.kt:463)
+	at app//io.ktor.server.engine.EmbeddedServer.instantiateAndConfigureApplication(EmbeddedServerJvm.kt:391)
+	at app//io.ktor.server.engine.EmbeddedServer.createApplication(EmbeddedServerJvm.kt:168)
+	at app//io.ktor.server.engine.EmbeddedServer.start(EmbeddedServerJvm.kt:322)
+	at app//io.ktor.server.engine.EmbeddedServer$startSuspend$2.invokeSuspend(EmbeddedServerJvm.kt:349)
+	at app//io.ktor.server.engine.EmbeddedServer$startSuspend$2.invoke(EmbeddedServerJvm.kt)
+	at app//io.ktor.server.engine.EmbeddedServer$startSuspend$2.invoke(EmbeddedServerJvm.kt)
+	at app//kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at app//kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at app//kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at app//kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at app//io.ktor.server.engine.EmbeddedServer.startSuspend(EmbeddedServerJvm.kt:349)
+	at app//io.ktor.server.engine.EmbeddedServer.startSuspend$default(EmbeddedServerJvm.kt:348)
+	at app//io.ktor.server.testing.TestApplication.start(TestApplication.kt:102)
+	at app//io.ktor.server.testing.client.DelegatingTestClientEngine.execute(DelegatingTestClientEngine.kt:48)
+	at app//io.ktor.client.engine.HttpClientEngine$executeWithinCallContext$2.invokeSuspend(HttpClientEngine.kt:183)
+	at app//kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at app//kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at app//kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at app//kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at app//kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at app//kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at app//kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at app//kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+</pre>
+<button class="clipboard-copy-btn" aria-label="Copy to clipboard" data-copy-element-id="test-message-test root endpoint">Copy</button>
+</span>
+</div>
+</div>
 <div class="tab">
 <h2>Tests</h2>
 <table>
@@ -78,19 +201,16 @@
 </tr>
 </thead>
 <tr>
-<td class="success">test root endpoint</td>
-<td class="success">1.019s</td>
-<td class="success">passed</td>
+<td class="failures">test root endpoint</td>
+<td class="failures">1.383s</td>
+<td class="failures">failed</td>
 </tr>
 </table>
 </div>
 <div class="tab">
 <h2>Standard output</h2>
 <span class="code">
-<pre id="class-stdout">2026-04-27 14:56:11.813 [DefaultDispatcher-worker-2 @call-context#3] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
-2026-04-27 14:56:11.941 [DefaultDispatcher-worker-2 @call-context#3] INFO  io.ktor.test - Application started in 0.14 seconds.
-2026-04-27 14:56:11.944 [DefaultDispatcher-worker-1 @coroutine#5] INFO  io.ktor.test - Responding at http://localhost:80
-2026-04-27 14:56:11.944 [DefaultDispatcher-worker-1 @coroutine#5] INFO  io.ktor.test - Responding at https://localhost:443
+<pre id="class-stdout">2026-05-04 17:21:28.783 [DefaultDispatcher-worker-2 @call-context#3] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
 </pre>
 <button class="clipboard-copy-btn" aria-label="Copy to clipboard" data-copy-element-id="class-stdout">Copy</button>
 </span>
@@ -103,7 +223,7 @@
 <input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
 </label>
 </div>Generated by 
-<a href="https://www.gradle.org">Gradle 9.1.0</a> at 27 апр. 2026 г., 14:56:12</p>
+<a href="https://www.gradle.org">Gradle 9.1.0</a> at 4 мая 2026 г., 17:21:29</p>
 </div>
 </div>
 </body>

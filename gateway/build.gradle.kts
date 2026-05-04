@@ -1,4 +1,3 @@
-
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(ktorLibs.plugins.ktor)
@@ -15,6 +14,10 @@ application {
 kotlin {
     jvmToolchain(21)
 }
+
+// Добавьте эту строку для версии Ktor
+val ktor_version = "3.4.2"
+
 dependencies {
     implementation(ktorLibs.server.callLogging)
     implementation(ktorLibs.server.config.yaml)
@@ -26,17 +29,28 @@ dependencies {
     implementation(ktorLibs.server.statusPages)
     implementation(ktorLibs.server.websockets)
     implementation(libs.logback.classic)
-    // Зависимости для Exposed - работа  с БД
+    
+    // Зависимости для Exposed - работа с БД
     implementation("org.jetbrains.exposed:exposed-core:0.56.0")
     implementation("org.jetbrains.exposed:exposed-dao:0.56.0")
     implementation("org.jetbrains.exposed:exposed-jdbc:0.56.0")
     implementation("org.jetbrains.exposed:exposed-java-time:0.56.0")
 
-    //Драйвер PostgreSQL
+    // Драйвер PostgreSQL
     implementation("org.postgresql:postgresql:42.7.1")
 
     // Пул соединений (рекомендуется)
     implementation("com.zaxxer:HikariCP:5.1.0")
+
+    // Хеширование паролей
+    implementation("at.favre.lib:bcrypt:0.10.2")
+    
+    // Аутентификация и Сессии Ktor
+    implementation("io.ktor:ktor-server-auth:$ktor_version")
+    implementation("io.ktor:ktor-server-sessions:$ktor_version")
+
+    // BCrypt для паролей
+    implementation("org.mindrot:jbcrypt:0.4")  // ← исправлено: убрана буква i
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)

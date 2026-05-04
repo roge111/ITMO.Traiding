@@ -33,6 +33,17 @@ class DataBaseManager {
         }
         return stmt.executeQuery()
     }
+
+    // Для запросов без возвращения ответа (INSERT, UPDATE, DELETE и тд)
+    fun execute(sql: String, vararg params: Any): Int {
+        val stmt: PreparedStatement = connection.prepareStatement(sql)
+        params.forEachIndexed { index, param ->
+            stmt.setObject(index + 1, param)
+        }
+        val result = stmt.executeUpdate()
+        stmt.close()
+        return result
+    }
     
 
 }
