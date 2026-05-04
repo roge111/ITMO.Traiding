@@ -11,16 +11,19 @@ ITMO.Traiding/
 │   │   ├── main.kt            # Точка входа приложения
 │   │   ├── Routing.kt         # Маршрутизация HTTP-запросов
 │   │   ├── Articles.kt        # (заглушка)
-│   │   ├── Http.kt            # (заглушка)
-│   │   ├── Resources.kt       # (заглушка)
-│   │   ├── Serialization.kt   # (заглушка)
-│   │   ├── StatusPages.kt     # (заглушка)
-│   │   ├── Websockets.kt      # (заглушка)
+│   │   ├── Http.kt            # Конфигурация HTTP (CORS)
+│   │   ├── Resources.kt       # Конфигурация ресурсов
+│   │   ├── Serialization.kt   # Конфигурация сериализации
+│   │   ├── StatusPages.kt     # Конфигурация страниц ошибок
+│   │   ├── Websockets.kt      # Конфигурация WebSockets
 │   │   ├── database/
 │   │   │   └── DataBaseManager.kt  # Менеджер подключения к PostgreSQL
-│   │   └── quotes/
-│   │       ├── Quote.kt            # Модель котировки и HTML-утилиты
-│   │       └── QuoteRepository.kt  # Репозиторий для работы с котировками из БД
+│   │   ├── quotes/
+│   │   │   ├── Quote.kt            # Модель котировки и HTML-утилиты
+│   │   │   └── QuoteRepository.kt  # Репозиторий для работы с котировками из БД
+│   │   └── users/
+│   │       ├── Register.kt         # Логика регистрации пользователей
+│   │       └── RegisterRoutes.kt   # Маршруты регистрации (HTML форма + API)
 │   ├── src/main/resources/
 │   │   ├── application.yaml   # Конфигурация Ktor
 │   │   └── logback.xml        # Конфигурация логирования
@@ -61,10 +64,13 @@ ITMO.Traiding/
 
 ### 3. Kotlin/Ktor веб-шлюз (`gateway`)
 - **Расположение:** `gateway/`
-- **Назначение:** Предоставляет HTTP API для доступа к котировкам из базы данных.
-- **Технологии:** Kotlin, Ktor, Exposed, PostgreSQL, HikariCP
+- **Назначение:** Предоставляет HTTP API для доступа к котировкам из базы данных и регистрации пользователей.
+- **Технологии:** Kotlin, Ktor, Exposed, PostgreSQL, HikariCP, BCrypt
 - **Функциональность:**
   - REST endpoint `/quotes` возвращает HTML-таблицу с котировками
+  - Endpoint `/register` предоставляет HTML-форму для регистрации
+  - API endpoint `/api/register` для обработки регистрации (POST)
+  - Хеширование паролей с использованием BCrypt
   - Подключение к той же БД PostgreSQL
   - Использование connection pool (HikariCP)
 - **Запуск:** `./gradlew run` (порт 8080 по умолчанию)
@@ -86,6 +92,18 @@ CREATE TABLE quotes (
 );
 ```
 
+Для функциональности регистрации пользователей используется таблица `users`:
+
+```sql
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    balance INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
 ## Требования
 
 - Linux (для модуля ядра)
@@ -101,7 +119,27 @@ CREATE TABLE quotes (
 sudo -u postgres psql
 CREATE DATABASE itmo_traiding_system;
 \c itmo_traiding_system
-CREATE TABLE quotes (...); # как выше
+
+-- Таблица котировок
+CREATE TABLE quotes (
+    quote_id SERIAL PRIMARY KEY,
+    quote_name VARCHAR(50) NOT NULL,
+    last_cost INTEGER NOT NULL,
+    min_cost INTEGER NOT NULL,
+    max_cost INTEGER NOT NULL,
+    percentage_change DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица пользователей
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    balance INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
 ### 2. Сборка и запуск модуля ядра
@@ -125,7 +163,7 @@ cd gateway
 ./gradlew run
 ```
 
-После запуска всех компонентов откройте в браузере `http://localhost:8080/quotes` для просмотра котировок.
+После запуска всех компонентов откройте в браузере `http://localhost:8080/quotes` для просмотра котировок или `http://localhost:8080/register` для регистрации пользователей.
 
 ## Конфигурация
 
@@ -135,7 +173,15 @@ cd gateway
 ktor:
   deployment:
     port: 8080
-    host: 0.0.0.0
+  application:
+    modules:
+      - com.trading.HttpKt.configureHttp
+      - com.trading.SerializationKt.configureSerialization
+      - com.trading.WebsocketsKt.configureWebsockets
+      - com.trading.StatusPagesKt.configureStatusPages
+      - com.trading.ResourcesKt.configureResources
+      - com.trading.RoutingKt.configureRouting
+      - com.trading.RegisterRoutesKt.module
 ```
 
 Параметры подключения к БД заданы в коде (`DataBaseManager.kt`):
