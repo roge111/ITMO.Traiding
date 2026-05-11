@@ -1,6 +1,6 @@
-package com.trading.users  // ← исправлено: packege → package
+package com.trading.users
 
-import org.mindrot.jbcrypt.BCrypt  // ← исправлено: jBCrypt → jbcrypt (всё маленькими)
+import org.mindrot.jbcrypt.BCrypt
 import com.trading.database.DataBaseManager
 
 class Register {
@@ -18,7 +18,6 @@ class Register {
 
         val hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt())
         
-        val connection = db.getConnection()
         db.execute(
             "INSERT INTO users (username, password_hash, balance) VALUES (?, ?, ?)",
             login, hashedPassword, 0
@@ -27,15 +26,11 @@ class Register {
         return "User registered successfully."
     }
 
-    fun checkUser(login: String): Boolean {
+    fun checkUser(username: String): Boolean {
         return try {
-            val connection = db.getConnection()
-            val stmt = connection.prepareStatement("SELECT 1 FROM users WHERE username = ? LIMIT 1")
-            stmt.setString(1, login)
-            val rs = stmt.executeQuery()
+            val rs = db.query("SELECT 1 FROM users WHERE username = ? LIMIT 1", username)
             val exists = rs.next()
             rs.close()
-            stmt.close()
             exists
         } catch (e: Exception) {
             println("Ошибка при проверке пользователя: ${e.message}")

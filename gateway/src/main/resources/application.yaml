@@ -9,4 +9,4 @@ ktor:
       - com.trading.StatusPagesKt.configureStatusPages
       - com.trading.ResourcesKt.configureResources
       - com.trading.RoutingKt.configureRouting
-      - com.trading.RegisterRoutesKt.module 
+      - com.trading.users.RegisterRoutesKt.module 

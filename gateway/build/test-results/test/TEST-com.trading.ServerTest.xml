@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.trading.ServerTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-05-04T14:21:27.608Z" hostname="egor-LL5FAW" time="1.383">
+<testsuite name="com.trading.ServerTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-05-11T18:46:37.060Z" hostname="egor-LL5FAW" time="1.413">
   <properties/>
-  <testcase name="test root endpoint" classname="com.trading.ServerTest" time="1.383">
+  <testcase name="test root endpoint" classname="com.trading.ServerTest" time="1.413">
     <failure message="io.ktor.server.engine.internal.ReloadingException: Module function cannot be found for the fully qualified name 'com.trading.RegisterRoutesKt.module'" type="io.ktor.server.engine.internal.ReloadingException">io.ktor.server.engine.internal.ReloadingException: Module function cannot be found for the fully qualified name 'com.trading.RegisterRoutesKt.module'
-	at app//io.ktor.server.engine.internal.CallableUtilsKt.executeModuleFunction(CallableUtils.kt:68)
+	at app//io.ktor.server.engine.internal.CallableUtilsKt.executeModuleFunction(CallableUtils.kt:33)
 	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invokeSuspend(EmbeddedServerJvm.kt:457)
 	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
 	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
@@ -56,7 +56,7 @@
 	at io.ktor.test.dispatcher.TestCommonKt$runTestWithRealTime$1.invokeSuspend(TestCommon.kt:48)
 	at kotlinx.coroutines.test.TestBuildersKt__TestBuildersKt$runTest$2$1$1.invokeSuspend(TestBuilders.kt:317)
 Caused by: io.ktor.server.engine.internal.ReloadingException: Module function cannot be found for the fully qualified name 'com.trading.RegisterRoutesKt.module'
-	at app//io.ktor.server.engine.internal.CallableUtilsKt.executeModuleFunction(CallableUtils.kt:68)
+	at app//io.ktor.server.engine.internal.CallableUtilsKt.executeModuleFunction(CallableUtils.kt:33)
 	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invokeSuspend(EmbeddedServerJvm.kt:457)
 	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
 	at app//io.ktor.server.engine.EmbeddedServer$launchModuleByName$2.invoke(EmbeddedServerJvm.kt)
@@ -113,7 +113,8 @@ Caused by: io.ktor.server.engine.internal.ReloadingException: Module function ca
 	at app//kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
 </failure>
   </testcase>
-  <system-out><![CDATA[2026-05-04 17:21:28.783 [DefaultDispatcher-worker-2 @call-context#3] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+  <system-out><![CDATA[2026-05-11 21:46:37.909 [DefaultDispatcher-worker-2 @call-context#3] INFO  io.ktor.test - No ktor.deployment.watch patterns specified, automatic reload is not active.
+Подключение к БД установлено
 ]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
