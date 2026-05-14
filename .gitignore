@@ -1,1 +1,3 @@
 .vscode/
+server/go/itmo-ingest
+server/go/.integration-quotes.log

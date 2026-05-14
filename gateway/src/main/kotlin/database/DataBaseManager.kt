@@ -10,10 +10,12 @@ class DataBaseManager {
     private lateinit var connection: Connection
     
     fun connect() {
-        val url = "jdbc:postgresql://localhost:5432/itmo_traiding_system"
-        val user = "postgres"
-        val password = "Gb%v5oVA"
-        
+        val url = System.getenv("POSTGRES_JDBC_URL")?.takeIf { it.isNotBlank() }
+            ?: "jdbc:postgresql://localhost:5432/itmo_traiding_system"
+        val user = System.getenv("POSTGRES_USER")?.takeIf { it.isNotBlank() } ?: "postgres"
+        val password = System.getenv("POSTGRES_PASSWORD") ?: "Gb%v5oVA"
+
+        PostgresMigrationRunner.ensureMigrated(url, user, password)
         connection = DriverManager.getConnection(url, user, password)
         println("Подключение к БД установлено")
     }

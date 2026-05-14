@@ -39,6 +39,13 @@ dependencies {
     // Драйвер PostgreSQL
     implementation("org.postgresql:postgresql:42.7.1")
 
+    // Миграции схемы PostgreSQL (users и др.)
+    implementation("org.flywaydb:flyway-core:10.21.0")
+    implementation("org.flywaydb:flyway-database-postgresql:10.21.0")
+
+    // ClickHouse JDBC (котировки), транспорт HTTP
+    implementation("com.clickhouse:clickhouse-jdbc:0.6.5:http")
+
     // Пул соединений (рекомендуется)
     implementation("com.zaxxer:HikariCP:5.1.0")
 
@@ -54,4 +61,11 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
+}
+
+tasks.register<JavaExec>("flywayMigrate") {
+    group = "database"
+    description = "Применить Flyway-миграции к PostgreSQL (POSTGRES_JDBC_URL, POSTGRES_USER, POSTGRES_PASSWORD)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.trading.database.FlywayMigrateApp")
 }
