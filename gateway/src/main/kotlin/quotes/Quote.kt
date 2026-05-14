@@ -41,7 +41,7 @@ fun List<Quote>.quotesAsTable(): String {
             <td style='color: ${if (quote.percentageChange >= 0) "green" else "red"}'>${String.format("%.2f", quote.percentageChange)}%</td>
             <td>${quote.minCost}</td>
             <td>${quote.maxCost}</td>
-        <table>
+        </tr>
         """.trimIndent()
     }
     

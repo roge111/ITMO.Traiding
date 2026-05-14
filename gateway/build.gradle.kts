@@ -39,6 +39,9 @@ dependencies {
     // Драйвер PostgreSQL
     implementation("org.postgresql:postgresql:42.7.1")
 
+    // ClickHouse JDBC (котировки), транспорт HTTP
+    implementation("com.clickhouse:clickhouse-jdbc:0.6.5:http")
+
     // Пул соединений (рекомендуется)
     implementation("com.zaxxer:HikariCP:5.1.0")
 

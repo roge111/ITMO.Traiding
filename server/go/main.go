@@ -5,43 +5,116 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/lib/pq"
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 )
 
-func main() {
-	cfg := pq.Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "Gb%v5oVA",
-		Database: "itmo_traiding_system",
+func getenv(key, defaultVal string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return defaultVal
 	}
+	return v
+}
 
-	c, err := pq.NewConnectorConfig(cfg)
+func getenvPassword() string {
+	return os.Getenv("CLICKHOUSE_PASSWORD")
+}
+
+func ensureSchema(db *sql.DB, database string) error {
+	if database != "" && database != "default" {
+		if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS " + quoteIdent(database)); err != nil {
+			return fmt.Errorf("create database: %w", err)
+		}
+	}
+	fqtn := quoteIdent(database) + "." + quoteIdent("quotes")
+	ddl := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+    quote_name String,
+    last_cost Int32,
+    min_cost Int32,
+    max_cost Int32,
+    percentage_change Float64,
+    created_at DateTime DEFAULT now(),
+    updated_at DateTime DEFAULT now(),
+    version UInt64
+) ENGINE = ReplacingMergeTree(version)
+ORDER BY quote_name
+`, fqtn)
+	if _, err := db.Exec(ddl); err != nil {
+		return fmt.Errorf("create table: %w", err)
+	}
+	return nil
+}
+
+func quoteIdent(name string) string {
+	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+}
+
+func openClickHouse() (*sql.DB, string, error) {
+	addr := getenv("CLICKHOUSE_ADDR", "localhost:9000")
+	database := getenv("CLICKHOUSE_DATABASE", "default")
+	user := getenv("CLICKHOUSE_USER", "default")
+	password := getenvPassword()
+
+	u := &url.URL{
+		Scheme: "clickhouse",
+		Host:     addr,
+		Path:     "/" + database,
+	}
+	if password != "" {
+		u.User = url.UserPassword(user, password)
+	} else {
+		u.User = url.User(user)
+	}
+	dsn := u.String()
+
+	db, err := sql.Open("clickhouse", dsn)
 	if err != nil {
-		log.Fatal(err)
+		return nil, "", err
 	}
+	db.SetMaxOpenConns(4)
 
-	// Открываем соединение
-	db := sql.OpenDB(c)
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, "", err
+	}
+	if err := ensureSchema(db, database); err != nil {
+		_ = db.Close()
+		return nil, "", err
+	}
+	return db, database, nil
+}
+
+func main() {
+	db, database, err := openClickHouse()
+	if err != nil {
+		log.Fatal("❌ Ошибка подключения к ClickHouse:", err)
+	}
 	defer db.Close()
 
-	// Проверяем соединение
-	err = db.Ping()
-	if err != nil {
-		log.Fatal("❌ Ошибка подключения к БД:", err)
-	}
+	fmt.Println("✅ Успешное подключение к ClickHouse!")
 
-	fmt.Println("✅ Успешное подключение к PostgreSQL!")
+	tableRef := quoteIdent(database) + "." + quoteIdent("quotes")
+	var logOffset int64
 
-	// Бесконечный цикл чтения файла
 	for {
 		func() {
+			fi, statErr := os.Stat("/quotes.log")
+			if statErr != nil {
+				log.Printf("Ошибка stat файла: %v. Повтор через 5 секунд.", statErr)
+				time.Sleep(5 * time.Second)
+				return
+			}
+			if fi.Size() < logOffset {
+				logOffset = 0
+			}
+
 			file, err := os.Open("/quotes.log")
 			if err != nil {
 				log.Printf("Ошибка открытия файла: %v. Повтор через 5 секунд.", err)
@@ -50,110 +123,110 @@ func main() {
 			}
 			defer file.Close()
 
+			if _, err := file.Seek(logOffset, 0); err != nil {
+				log.Printf("Ошибка seek: %v", err)
+				return
+			}
+
 			scanner := bufio.NewScanner(file)
 			for scanner.Scan() {
-				row_data := scanner.Text()
-				if row_data == "" {
+				rowData := scanner.Text()
+				if rowData == "" {
 					continue
 				}
 
-				data_quote := strings.Split(row_data, ",")
-				if len(data_quote) < 3 {
-					log.Printf("Некорректная строка: %s", row_data)
+				dataQuote := strings.Split(rowData, ",")
+				if len(dataQuote) < 3 {
+					log.Printf("Некорректная строка: %s", rowData)
 					continue
 				}
 
-				name_quote := data_quote[0]
-				price, err := strconv.Atoi(data_quote[1])
+				nameQuote := dataQuote[0]
+				price, err := strconv.Atoi(dataQuote[1])
 				if err != nil {
 					log.Printf("Ошибка конвертации цены: %v", err)
 					continue
 				}
 
-				timestamp, err := time.Parse("2006-01-02 15:04:05", data_quote[2])
-				if err != nil {
-					log.Printf("Ошибка парсинга времени: %v", err)
+				if _, err := time.Parse("2006-01-02 15:04:05", dataQuote[2]); err != nil {
+					log.Printf("Некорректное время в строке: %v", err)
 					continue
 				}
 
-				var lastID int
-				_ = db.QueryRow("SELECT COALESCE(MAX(quote_id), 0) FROM quotes").Scan(&lastID)
-				newID := lastID + 1
+				now := time.Now().UTC()
 
-				var flag int
-				err = db.QueryRow("SELECT 1 FROM quotes WHERE quote_name=$1", name_quote).Scan(&flag)
-				if err == sql.ErrNoRows {
-					flag = 0 // записи нет
-				} else if err != nil {
-					log.Printf("Ошибка проверки существования: %v", err)
+				q := `SELECT last_cost, min_cost, max_cost, created_at, version
+					FROM ` + tableRef + ` FINAL WHERE quote_name = ?`
+				rows, qerr := db.Query(q, nameQuote)
+				if qerr != nil {
+					log.Printf("Ошибка запроса ClickHouse: %v", qerr)
 					continue
 				}
-
-				if flag == 0 {
-					// Повторная проверка (на случай race condition)
-					var flag2 int
-					err := db.QueryRow("SELECT 1 FROM quotes WHERE quote_name=$1", name_quote).Scan(&flag2)
-					if err == sql.ErrNoRows {
-						flag2 = 0
-					} else if err != nil {
-						log.Printf("Ошибка повторной проверки: %v", err)
-						continue
+				func() {
+					defer rows.Close()
+					if !rows.Next() {
+						_, ierr := db.Exec(
+							`INSERT INTO `+tableRef+` (quote_name, last_cost, min_cost, max_cost, percentage_change, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+							nameQuote, int32(price), int32(price), int32(price), 0.0, now, now, uint64(1),
+						)
+						if ierr != nil {
+							log.Printf("Ошибка вставки: %v", ierr)
+						} else {
+							fmt.Printf("✅ [%s] Бумага добавлена в ClickHouse: цена=%d\n", time.Now().Format("15:04:05"), price)
+						}
+						return
+					}
+					var (
+						lastC   int32
+						minC    int32
+						maxC    int32
+						created time.Time
+						ver     uint64
+					)
+					if scanErr := rows.Scan(&lastC, &minC, &maxC, &created, &ver); scanErr != nil {
+						log.Printf("Ошибка чтения строки: %v", scanErr)
+						return
 					}
 
-					if flag2 == 0 {
-						_, err := db.Exec("INSERT INTO quotes(quote_id, quote_name, last_cost, min_cost, max_cost, updated_at) VALUES ($1, $2, $3, $4, $5, $6)", newID, name_quote, price, price, price, timestamp)
-						if err != nil {
-							log.Printf("Ошибка вставки: %v", err)
-						} else {
-							fmt.Printf("✅ [%s] Бумага добавлена в базу данных: цена=%d\n", time.Now().Format("15:04:05"), price)
-						}
+					newLast := int32(price)
+					newMin := minC
+					if int32(price) < newMin {
+						newMin = int32(price)
 					}
-				} else {
-					var dbTime time.Time
-					var quote_name_db string
-					var last_cost_db int
-					var min_cost_db int
-					var max_cost_db int
-
-					err = db.QueryRow("SELECT quote_name, last_cost, min_cost, max_cost, updated_at FROM quotes WHERE quote_name=$1", name_quote).Scan(&quote_name_db, &last_cost_db, &min_cost_db, &max_cost_db, &dbTime)
-					if err != nil {
-						log.Printf("Ошибка получения данных: %v", err)
-						continue
+					newMax := maxC
+					if int32(price) > newMax {
+						newMax = int32(price)
+					}
+					var newPct float64
+					if lastC != 0 {
+						newPct = (float64(price) - float64(lastC)) / float64(lastC) * 100
 					}
 
-					if timestamp.After(dbTime) {
-						if price < min_cost_db {
-							min_cost_db = price
-						}
-						if price > max_cost_db {
-							max_cost_db = price
-						}
-
-						var del_price_procent float64
-						if last_cost_db != 0 {
-							del_price_procent = (float64(price-last_cost_db) / float64(last_cost_db)) * 100
-						} else {
-							del_price_procent = 0
-						}
-
-						_, err := db.Exec("UPDATE quotes SET last_cost=$1, min_cost=$2, max_cost=$3, updated_at=$4, percentage_change=$5 WHERE quote_name=$6", price, min_cost_db, max_cost_db, timestamp, del_price_procent, name_quote)
-						if err != nil {
-							log.Printf("Ошибка обновления: %v", err)
-						} else {
-							fmt.Printf("📈 [%s] %s обновлена: %d (%.2f%%)\n", time.Now().Format("15:04:05"), name_quote, price, del_price_procent)
-						}
+					_, ierr := db.Exec(
+						`INSERT INTO `+tableRef+` (quote_name, last_cost, min_cost, max_cost, percentage_change, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+						nameQuote, newLast, newMin, newMax, newPct, created, now, ver+1,
+					)
+					if ierr != nil {
+						log.Printf("Ошибка вставки версии: %v", ierr)
 					} else {
-						fmt.Printf("⏸ [%s] %s пропущена (старые данные)\n", time.Now().Format("15:04:05"), name_quote)
+						fmt.Printf("📈 [%s] %s обновлена: %d (%.2f%%)\n", time.Now().Format("15:04:05"), nameQuote, price, newPct)
 					}
-				}
+				}()
 			}
 
 			if err := scanner.Err(); err != nil {
 				log.Printf("Ошибка чтения файла: %v", err)
+				return
 			}
+
+			pos, err := file.Seek(0, 1)
+			if err != nil {
+				log.Printf("Ошибка позиции файла: %v", err)
+				return
+			}
+			logOffset = pos
 		}()
 
-		// Пауза перед повторным чтением файла (1 секунда)
 		time.Sleep(1 * time.Second)
 	}
 }
