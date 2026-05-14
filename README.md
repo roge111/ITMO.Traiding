@@ -7,6 +7,10 @@
 ```
 ITMO.Traiding/
 ├── docker-compose.yml          # Локальный PostgreSQL + ClickHouse
+├── scripts/
+│   ├── integration-test.sh      # Интеграционный прогон (Compose + Go + gateway)
+│   └── docker/
+│       └── init-postgres.sql    # CREATE users при первом старте Postgres в Docker
 ├── gateway/                    # Kotlin/Ktor веб-шлюз
 │   ├── src/main/kotlin/
 │   │   ├── main.kt            # Точка входа приложения
@@ -121,6 +125,8 @@ CREATE TABLE users (
 | `CLICKHOUSE_DATABASE` | `default` |
 | `CLICKHOUSE_USER` | `default` |
 | `CLICKHOUSE_PASSWORD` | пусто |
+| `QUOTES_LOG_PATH` | `/quotes.log` |
+| `PROCESS_EXISTING_AND_EXIT` | не задано: бесконечный цикл; `true` или `1`: один проход по файлу с начала и выход с кодом `0` (удобно для CI и `scripts/integration-test.sh`) |
 
 Пароль ClickHouse в коде не задаётся.
 
@@ -146,6 +152,18 @@ CREATE TABLE users (
 
 (при необходимости скорректируйте `POSTGRES_JDBC_URL`).
 
+## Интеграционные тесты
+
+Скрипт [scripts/integration-test.sh](scripts/integration-test.sh) поднимает сервисы из `docker-compose.yml`, готовит таблицу `users`, сбрасывает `quotes` в ClickHouse, прогоняет Go в режиме «один проход по логу», проверяет агрегаты в ClickHouse, собирает gateway и проверяет `/quotes` и `/api/register`.
+
+Требования: Docker с Compose (см. выше), Go и JDK 21+ в `PATH`, свободные порты `5432`, `8123`, `9000`, `8080`.
+
+```bash
+chmod +x scripts/integration-test.sh
+export POSTGRES_PASSWORD=postgres
+./scripts/integration-test.sh
+```
+
 ## Требования
 
 - Linux (для модуля ядра)
@@ -165,7 +183,11 @@ CREATE TABLE users (
 docker compose up -d
 ```
 
+Если команды `docker compose` нет, установите плагин Compose (в Docker Desktop включите Compose V2) или используйте отдельный бинарь `docker-compose`.
+
 Поднимаются PostgreSQL (`5432`) и ClickHouse (`8123` HTTP, `9000` native). Для gateway при использовании этого compose задайте `POSTGRES_PASSWORD=postgres`.
+
+При **первом** создании тома PostgreSQL выполняется [scripts/docker/init-postgres.sql](scripts/docker/init-postgres.sql) (таблица `users`). Повторно инициализация entrypoint-а не выполняется — скрипт интеграции дополнительно выполняет `CREATE TABLE IF NOT EXISTS users`.
 
 ### 1. Настройка PostgreSQL (пользователи)
 

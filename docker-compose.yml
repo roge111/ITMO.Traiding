@@ -10,6 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/docker/init-postgres.sql:/docker-entrypoint-initdb.d/01-users.sql:ro
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
