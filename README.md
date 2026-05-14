@@ -8,9 +8,7 @@
 ITMO.Traiding/
 ├── docker-compose.yml          # Локальный PostgreSQL + ClickHouse
 ├── scripts/
-│   ├── integration-test.sh      # Интеграционный прогон (Compose + Go + gateway)
-│   └── docker/
-│       └── init-postgres.sql    # CREATE users при первом старте Postgres в Docker
+│   └── integration-test.sh      # Интеграционный прогон (Compose + Go + gateway)
 ├── gateway/                    # Kotlin/Ktor веб-шлюз
 │   ├── src/main/kotlin/
 │   │   ├── main.kt            # Точка входа приложения
@@ -124,11 +122,11 @@ CREATE TABLE users (
 | `CLICKHOUSE_ADDR` | `localhost:9000` |
 | `CLICKHOUSE_DATABASE` | `default` |
 | `CLICKHOUSE_USER` | `default` |
-| `CLICKHOUSE_PASSWORD` | пусто |
+| `CLICKHOUSE_PASSWORD` | пусто (свой сервер); с **docker-compose.yml** из репозитория — `itmo` |
 | `QUOTES_LOG_PATH` | `/quotes.log` |
 | `PROCESS_EXISTING_AND_EXIT` | не задано: бесконечный цикл; `true` или `1`: один проход по файлу с начала и выход с кодом `0` (удобно для CI и `scripts/integration-test.sh`) |
 
-Пароль ClickHouse в коде не задаётся.
+Для локального compose задайте `export CLICKHOUSE_PASSWORD=itmo` (или переопределите пароль в `docker-compose.yml` и в окружении). Пароль в коде не прошивается — только через переменные.
 
 ### Gateway — ClickHouse (котировки)
 
@@ -136,7 +134,7 @@ CREATE TABLE users (
 |------------|----------------|
 | `CLICKHOUSE_JDBC_URL` | `jdbc:clickhouse://localhost:8123/default` |
 | `CLICKHOUSE_USER` | `default` |
-| `CLICKHOUSE_PASSWORD` | пусто |
+| `CLICKHOUSE_PASSWORD` | пусто; с **docker-compose.yml** из репозитория — `itmo` |
 
 ### Gateway — PostgreSQL (пользователи)
 
@@ -146,22 +144,34 @@ CREATE TABLE users (
 | `POSTGRES_USER` | `postgres` |
 | `POSTGRES_PASSWORD` | `Gb%v5oVA` |
 
-**Docker Compose** в корне задаёт для PostgreSQL пароль `postgres`. Чтобы шлюз и регистрация подключались к контейнеру, задайте перед запуском gateway, например:
+**Docker Compose** в корне задаёт для PostgreSQL пароль `postgres` и для ClickHouse — `CLICKHOUSE_PASSWORD=itmo`. Чтобы шлюз и регистрация подключались к контейнеру, задайте перед запуском gateway, например:
 
 `export POSTGRES_PASSWORD=postgres`
 
-(при необходимости скорректируйте `POSTGRES_JDBC_URL`).
+`export CLICKHOUSE_PASSWORD=itmo`
+
+(при необходимости скорректируйте `POSTGRES_JDBC_URL` и `CLICKHOUSE_JDBC_URL`).
 
 ## Интеграционные тесты
 
-Скрипт [scripts/integration-test.sh](scripts/integration-test.sh) поднимает сервисы из `docker-compose.yml`, готовит таблицу `users`, сбрасывает `quotes` в ClickHouse, прогоняет Go в режиме «один проход по логу», проверяет агрегаты в ClickHouse, собирает gateway и проверяет `/quotes` и `/api/register`.
+Скрипт [scripts/integration-test.sh](scripts/integration-test.sh) поднимает сервисы из `docker-compose.yml`, выполняет `./gradlew flywayMigrate`, очищает тестового пользователя, сбрасывает `quotes` в ClickHouse, прогоняет Go в режиме «один проход по логу», проверяет агрегаты в ClickHouse, собирает gateway и проверяет `/quotes` и `/api/register`. Ожидание ClickHouse — через `clickhouse-client` внутри контейнера (без анонимного HTTP `?query=`). Если в `PATH` нет `go`, сборка и ingest выполняются во временном контейнере `golang:1.22-bookworm` в той же Docker-сети, что и ClickHouse.
 
-Требования: Docker с Compose (см. выше), Go и JDK 21+ в `PATH`, свободные порты `5432`, `8123`, `9000`, `8080`.
+Требования: Docker с Compose (см. выше), JDK 21+ в `PATH`, свободные порты `5432`, `8123`, `9000`, `8080`. **Go** нужен только для ручной разработки без Docker; для скрипта — опционально.
 
 ```bash
 chmod +x scripts/integration-test.sh
 export POSTGRES_PASSWORD=postgres
+# Пароль ClickHouse по умолчанию в скрипте совпадает с docker-compose.yml (itmo); при необходимости:
+# export CLICKHOUSE_PASSWORD=itmo
 ./scripts/integration-test.sh
+```
+
+Отдельно применить только миграции PostgreSQL (без запуска gateway):
+
+```bash
+cd gateway
+export POSTGRES_PASSWORD=postgres
+./gradlew flywayMigrate --no-daemon
 ```
 
 ## Требования
@@ -185,9 +195,15 @@ docker compose up -d
 
 Если команды `docker compose` нет, установите плагин Compose (в Docker Desktop включите Compose V2) или используйте отдельный бинарь `docker-compose`.
 
-Поднимаются PostgreSQL (`5432`) и ClickHouse (`8123` HTTP, `9000` native). Для gateway при использовании этого compose задайте `POSTGRES_PASSWORD=postgres`.
+Поднимаются PostgreSQL (`5432`) и ClickHouse (`8123` HTTP, `9000` native). В compose для ClickHouse заданы `CLICKHOUSE_USER=default` и `CLICKHOUSE_PASSWORD=itmo`. Для шлюза и Go задайте, например:
 
-При **первом** создании тома PostgreSQL выполняется [scripts/docker/init-postgres.sql](scripts/docker/init-postgres.sql) (таблица `users`). Повторно инициализация entrypoint-а не выполняется — скрипт интеграции дополнительно выполняет `CREATE TABLE IF NOT EXISTS users`.
+`export POSTGRES_PASSWORD=postgres`
+
+`export CLICKHOUSE_PASSWORD=itmo`
+
+Затем накатите схему PostgreSQL: `cd gateway && ./gradlew flywayMigrate` (см. [db/migration](gateway/src/main/resources/db/migration/)).
+
+Если том ClickHouse создавался **до** появления пароля в compose, старый конфиг может остаться в volume: выполните `docker compose down -v` и снова `docker compose up -d` (данные ClickHouse и Postgres в compose будут сброшены).
 
 ### 1. Настройка PostgreSQL (пользователи)
 
@@ -195,7 +211,18 @@ docker compose up -d
 sudo -u postgres psql
 CREATE DATABASE itmo_traiding_system;
 \c itmo_traiding_system
+```
 
+Далее создайте таблицу `users` вручную **или** из корня репозитория выполните миграции Flyway (переменные `POSTGRES_*` должны указывать на ваш инстанс):
+
+```bash
+cd gateway
+./gradlew flywayMigrate --no-daemon
+```
+
+Ручной SQL (эквивалент первой миграции `V1__create_users.sql`):
+
+```sql
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -278,7 +305,7 @@ ktor:
 
 ## Возможные улучшения
 
-1. **Миграции:** Flyway/Liquibase для PostgreSQL и/или версионируемые DDL для ClickHouse
+1. **Миграции:** расширить Flyway для ClickHouse при необходимости; версионируемые DDL для ClickHouse
 2. **API:** JSON, фильтрация и пагинация для котировок
 3. **Веб-интерфейс:** SPA для визуализации
 4. **Мониторинг:** Prometheus/Grafana

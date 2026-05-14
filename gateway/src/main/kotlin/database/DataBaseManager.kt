@@ -15,6 +15,7 @@ class DataBaseManager {
         val user = System.getenv("POSTGRES_USER")?.takeIf { it.isNotBlank() } ?: "postgres"
         val password = System.getenv("POSTGRES_PASSWORD") ?: "Gb%v5oVA"
 
+        PostgresMigrationRunner.ensureMigrated(url, user, password)
         connection = DriverManager.getConnection(url, user, password)
         println("Подключение к БД установлено")
     }

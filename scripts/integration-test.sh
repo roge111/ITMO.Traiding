@@ -30,19 +30,42 @@ export POSTGRES_JDBC_URL="${POSTGRES_JDBC_URL:-jdbc:postgresql://localhost:5432/
 export CLICKHOUSE_ADDR="${CLICKHOUSE_ADDR:-localhost:9000}"
 export CLICKHOUSE_DATABASE="${CLICKHOUSE_DATABASE:-default}"
 export CLICKHOUSE_USER="${CLICKHOUSE_USER:-default}"
-export CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-}"
+# Must match docker-compose.yml (ClickHouse 24.x expects credentials for remote access).
+export CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-itmo}"
 
 INTEGRATION_USER="${INTEGRATION_USER:-integration_user}"
 INTEGRATION_PASS="${INTEGRATION_PASS:-password123}"
-if [[ "$(uname -s)" == Darwin ]]; then
-  QUOTES_TMP="${QUOTES_TMP:-$(mktemp -t itmo-quotes)}"
-else
-  QUOTES_TMP="${QUOTES_TMP:-$(mktemp /tmp/itmo-quotes.XXXXXX)}"
-fi
+# Under server/go so the same path works when Go runs in a Docker mount (/work/…).
+QUOTES_TMP="${QUOTES_TMP:-$ROOT/server/go/.integration-quotes.log}"
+GO_DOCKER_IMAGE="${GO_DOCKER_IMAGE:-golang:1.22-bookworm}"
+# Service hostname on the Compose network (not host.docker.internal: avoids CH auth quirks).
+GO_CONTAINER_CLICKHOUSE_ADDR="${GO_CONTAINER_CLICKHOUSE_ADDR:-clickhouse:9000}"
 GATEWAY_PID_FILE="${TMPDIR:-/tmp}/itmo-gateway-integration.pid"
 GATEWAY_LOG="${TMPDIR:-/tmp}/itmo-gateway-integration.log"
 
 log() { printf '%s %s\n' "[$(date '+%Y-%m-%d %H:%M:%S')]" "$*"; }
+
+run_go_via_docker() {
+  local base net
+  base="$(basename "$QUOTES_TMP")"
+  net="$(docker container inspect -f '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}}{{end}}' itmo-trading-clickhouse 2>/dev/null || true)"
+  if [[ -z "$net" ]]; then
+    log "ERROR: cannot read Docker network for container itmo-trading-clickhouse"
+    exit 1
+  fi
+  log "Go не найден в PATH; tidy, test, build и ingest в контейнере ${GO_DOCKER_IMAGE} (сеть ${net})…"
+  docker run --rm --network "$net" \
+    -v "$ROOT/server/go:/work" -w /work \
+    -e GOFLAGS="-buildvcs=false" \
+    -e CLICKHOUSE_ADDR="$GO_CONTAINER_CLICKHOUSE_ADDR" \
+    -e CLICKHOUSE_DATABASE="$CLICKHOUSE_DATABASE" \
+    -e CLICKHOUSE_USER="$CLICKHOUSE_USER" \
+    -e CLICKHOUSE_PASSWORD="$CLICKHOUSE_PASSWORD" \
+    -e "QUOTES_LOG_PATH=/work/${base}" \
+    -e PROCESS_EXISTING_AND_EXIT=true \
+    "$GO_DOCKER_IMAGE" \
+    bash -c 'set -euo pipefail; go mod tidy; go test ./...; go build -o itmo-ingest .; ./itmo-ingest'
+}
 
 cleanup_gateway() {
   if [[ -f "$GATEWAY_PID_FILE" ]]; then
@@ -72,29 +95,27 @@ for i in $(seq 1 60); do
   fi
 done
 
-log "Waiting for ClickHouse HTTP…"
-for i in $(seq 1 60); do
-  if curl -fsS "http://localhost:8123/?query=SELECT%201" | grep -qx 1; then
+log "Waiting for ClickHouse (native client)…"
+for i in $(seq 1 90); do
+  if dcompose exec -T clickhouse clickhouse-client --query "SELECT 1" 2>/dev/null | grep -qx 1; then
     break
   fi
   sleep 1
-  if [[ "$i" == 60 ]]; then
+  if [[ "$i" == 90 ]]; then
     log "ERROR: ClickHouse not ready"
     exit 1
   fi
 done
 
-log "Ensuring users table in PostgreSQL…"
-dcompose exec -T postgres psql -U "$POSTGRES_USER" -d itmo_traiding_system -v ON_ERROR_STOP=1 <<'EOSQL'
-CREATE TABLE IF NOT EXISTS users (
-    user_id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    balance INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-DELETE FROM users WHERE username = 'integration_user';
-EOSQL
+log "Flyway migrate (PostgreSQL schema)…"
+(
+  cd "$ROOT/gateway"
+  ./gradlew flywayMigrate --no-daemon
+)
+
+log "Cleaning integration test user in PostgreSQL…"
+dcompose exec -T postgres psql -U "$POSTGRES_USER" -d itmo_traiding_system -v ON_ERROR_STOP=1 -c \
+  "DELETE FROM users WHERE username = 'integration_user';" 2>/dev/null || true
 
 log "Resetting ClickHouse quotes table…"
 dcompose exec -T clickhouse clickhouse-client --query "DROP TABLE IF EXISTS quotes" || true
@@ -106,19 +127,25 @@ AAPL,90,2025-01-01 10:00:02
 GOOG,200,2025-01-01 10:00:03
 EOF
 
-log "Go: tidy, test (if any), build…"
-(
-  cd "$ROOT/server/go"
-  go mod tidy
-  go test ./...
-  go build -o "$ROOT/server/go/itmo-ingest" .
-)
-
-log "Go: ingest quotes (one-shot)…"
-export QUOTES_LOG_PATH="$QUOTES_TMP"
-export PROCESS_EXISTING_AND_EXIT=true
-"$ROOT/server/go/itmo-ingest"
-unset PROCESS_EXISTING_AND_EXIT
+if command -v go >/dev/null 2>&1; then
+  log "Go: tidy, test (if any), build…"
+  (
+    cd "$ROOT/server/go"
+    go mod tidy
+    go test ./...
+    go build -o "$ROOT/server/go/itmo-ingest" .
+  )
+  log "Go: ingest quotes (one-shot)…"
+  (
+    cd "$ROOT/server/go"
+    export QUOTES_LOG_PATH="$QUOTES_TMP"
+    export PROCESS_EXISTING_AND_EXIT=true
+    ./itmo-ingest
+  )
+  unset PROCESS_EXISTING_AND_EXIT
+else
+  run_go_via_docker
+fi
 
 log "Verifying ClickHouse FINAL state…"
 dcompose exec -T clickhouse clickhouse-client --query \
@@ -161,7 +188,8 @@ log "Gateway: start in background…"
   nohup env POSTGRES_PASSWORD="$POSTGRES_PASSWORD" POSTGRES_USER="$POSTGRES_USER" \
     POSTGRES_JDBC_URL="$POSTGRES_JDBC_URL" \
     CLICKHOUSE_JDBC_URL="${CLICKHOUSE_JDBC_URL:-jdbc:clickhouse://localhost:8123/default}" \
-    CLICKHOUSE_USER="$CLICKHOUSE_USER" CLICKHOUSE_PASSWORD="$CLICKHOUSE_PASSWORD" \
+    CLICKHOUSE_USER="$CLICKHOUSE_USER" \
+    CLICKHOUSE_PASSWORD="$CLICKHOUSE_PASSWORD" \
     ./gradlew run --no-daemon >"$GATEWAY_LOG" 2>&1 &
   echo $! >"$GATEWAY_PID_FILE"
 )
