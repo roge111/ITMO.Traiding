@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.trading.android.app-mergeDebugResources-31:/layout/activity_register.xml",
+        "source": "com.trading.android.app-main-34:/layout/activity_register.xml"
+    },
+    {
+        "merged": "com.trading.android.app-mergeDebugResources-31:/layout/activity_login.xml",
+        "source": "com.trading.android.app-main-34:/layout/activity_login.xml"
+    },
+    {
+        "merged": "com.trading.android.app-mergeDebugResources-31:/layout/activity_quotes.xml",
+        "source": "com.trading.android.app-main-34:/layout/activity_quotes.xml"
+    },
+    {
+        "merged": "com.trading.android.app-mergeDebugResources-31:/layout/quote_item.xml",
+        "source": "com.trading.android.app-main-34:/layout/quote_item.xml"
+    }
+]

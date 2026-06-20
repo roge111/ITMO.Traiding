@@ -1,5 +1,8 @@
 package com.trading.quotes
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Quote(
     val name: String,
     val price: Double,

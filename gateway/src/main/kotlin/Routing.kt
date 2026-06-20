@@ -19,7 +19,9 @@ fun Application.configureRouting() {
             )
         }
 
-        
-
+        get("/api/quotes") {
+            val quotes = QuoteRepository.getQuotesDB()
+            call.respond(quotes)
+        }
     }
 }

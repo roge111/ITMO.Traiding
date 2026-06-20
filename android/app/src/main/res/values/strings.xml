@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">ITMO Trading</string>
+    <string name="login">Login</string>
+    <string name="register">Register</string>
+    <string name="quotes">Quotes</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="login_btn">Sign In</string>
+    <string name="register_btn">Sign Up</string>
+    <string name="no_account">Don\'t have an account? Register</string>
+    <string name="has_account">Already have an account? Login</string>
+    <string name="loading">Loading...</string>
+    <string name="error_network">Network error</string>
+    <string name="no_quotes">No quotes available</string>
+</resources>

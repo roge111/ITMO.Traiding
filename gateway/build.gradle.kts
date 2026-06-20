@@ -59,6 +59,9 @@ dependencies {
     // BCrypt для паролей
     implementation("org.mindrot:jbcrypt:0.4")  // ← исправлено: убрана буква i
 
+    // JSON serialization for API
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)
 }

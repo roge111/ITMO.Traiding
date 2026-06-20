@@ -12,6 +12,7 @@ object PostgresMigrationRunner {
         Flyway.configure()
             .dataSource(jdbcUrl, user, password)
             .locations("classpath:db/migration")
+            .baselineOnMigrate(true)  // <-- Добавить эту строку!
             .load()
             .migrate()
     }
