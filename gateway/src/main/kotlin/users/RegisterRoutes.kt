@@ -8,8 +8,8 @@ import io.ktor.http.*
 import com.trading.users.*
 
 fun Application.registerRoutes() {
-    val register = Register()
-    val auth = Authorization()
+    val register by lazy { Register() }
+    val auth by lazy { Authorization() }
     
     routing {
         get("/register") {
@@ -147,7 +147,6 @@ fun Application.registerRoutes() {
             }
             val result = auth.authorization(login, password)
             
-            // Временная заглушка для проверки
             if (result) {
                 println("Login successful")
                 call.respond(HttpStatusCode.OK, "Login successful")

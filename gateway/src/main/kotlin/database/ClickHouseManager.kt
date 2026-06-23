@@ -26,6 +26,7 @@ object ClickHouseManager {
         }
         dataSource = HikariDataSource(cfg)
         ensureQuotesTable()
+        ensureQuotesHistoryTable()
     }
 
     fun getDataSource(): DataSource = dataSource
@@ -46,6 +47,24 @@ object ClickHouseManager {
             )
             ENGINE = ReplacingMergeTree(version)
             ORDER BY quote_name
+        """.trimIndent()
+        dataSource.connection.use { conn ->
+            conn.createStatement().use { st: Statement ->
+                st.execute(ddl)
+            }
+        }
+    }
+
+    private fun ensureQuotesHistoryTable() {
+        val ddl = """
+            CREATE TABLE IF NOT EXISTS quotes_history (
+                quote_name String,
+                price Int32,
+                happened_at DateTime,
+                version UInt64
+            )
+            ENGINE = MergeTree()
+            ORDER BY (quote_name, happened_at, version)
         """.trimIndent()
         dataSource.connection.use { conn ->
             conn.createStatement().use { st: Statement ->

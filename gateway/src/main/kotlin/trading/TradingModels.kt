@@ -1,13 +1,8 @@
-package com.trading.android
+package com.trading.trading
 
-data class Quote(
-    val name: String,
-    val price: Double,
-    val percentageChange: Double,
-    val minCost: Long,
-    val maxCost: Long
-)
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class AccountSummary(
     val username: String,
     val balance: Double,
@@ -15,6 +10,7 @@ data class AccountSummary(
     val totalAssets: Double
 )
 
+@Serializable
 data class Holding(
     val quoteName: String,
     val quantity: Int,
@@ -24,17 +20,20 @@ data class Holding(
     val profit: Double
 )
 
+@Serializable
 data class TradeResult(
     val message: String,
     val balance: Double,
     val holding: Holding?
 )
 
+@Serializable
 data class PricePoint(
     val price: Double,
     val timestamp: String
 )
 
+@Serializable
 data class Candle(
     val open: Double,
     val high: Double,

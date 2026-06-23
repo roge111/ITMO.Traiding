@@ -13,6 +13,7 @@ object PostgresMigrationRunner {
             .dataSource(jdbcUrl, user, password)
             .locations("classpath:db/migration")
             .baselineOnMigrate(true)  // <-- Добавить эту строку!
+            .ignoreMigrationPatterns("*:missing")
             .load()
             .migrate()
     }

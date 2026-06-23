@@ -2,11 +2,113 @@
 
 Система для сбора, обработки и отображения биржевых котировок в реальном времени. Проект состоит из трёх основных компонентов: модуля ядра Linux, Go-сервера для записи котировок в **ClickHouse** и Kotlin/Ktor веб-шлюза. Пользователи и регистрация хранятся в **PostgreSQL**; котировки для `/quotes` читаются и пишутся только в ClickHouse.
 
+## Состояние MVP
+
+Реализован минимальный сквозной сценарий:
+
+1. Linux-драйвер генерирует массив котировок и отдаёт его через символьное устройство `/dev/itmo_quotes`.
+2. Go-сервис выполняет `open -> read -> close`, разбирает массив и записывает версии котировок в ClickHouse.
+3. Ktor предоставляет регистрацию, авторизацию, JSON API котировок, баланс, портфель и операции покупки/продажи.
+4. Нативное Android-приложение на Kotlin + Jetpack Compose позволяет зарегистрироваться, войти, открыть карточку котировки, посмотреть простой график, купить/продать бумаги и увидеть портфель.
+
+В MVP пока не входят React Native-клиент, Redis/KeyDB, OpenTelemetry и имитатор 10 000 клиентов. Авторизация реализована упрощённо: мобильное приложение передаёт `login` в торговые API без JWT/сессий. Для защиты это стоит назвать учебным ограничением MVP и следующим шагом развития.
+
+## Быстрый запуск на Windows
+
+### 1. Требования
+
+- Docker Desktop с включённым Linux containers;
+- JDK 20 (для gateway);
+- Go 1.22+;
+- Android Studio с Android SDK Platform 34 и Android Emulator;
+- WSL2 + Ubuntu — только для сборки и запуска Linux-драйвера.
+
+### 2. Базы данных
+
+В PowerShell из корня проекта:
+
+```powershell
+docker compose up -d postgres clickhouse
+docker compose ps
+```
+
+### 3. Gateway
+
+```powershell
+cd gateway
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-20"
+$env:POSTGRES_PASSWORD = "postgres"
+$env:CLICKHOUSE_PASSWORD = "itmo"
+.\gradlew.bat flywayMigrate
+.\gradlew.bat run
+```
+
+После запуска доступны:
+
+- `http://localhost:8080/register`;
+- `http://localhost:8080/authorization`;
+- `http://localhost:8080/api/quotes`;
+- `http://localhost:8080/api/account?login=<username>`;
+- `http://localhost:8080/api/portfolio?login=<username>`;
+- `POST http://localhost:8080/api/trade`.
+
+### 4. Go-сервис без Linux-драйвера
+
+Для демонстрации в Windows можно передать обычный текстовый файл:
+
+```powershell
+cd server\go
+$env:CLICKHOUSE_PASSWORD = "itmo"
+$env:QUOTES_SOURCE_PATH = "..\drivers\quotes.log"
+$env:PROCESS_EXISTING_AND_EXIT = "true"
+go run .
+```
+
+Формат каждой строки:
+
+```text
+SBER,12345,2026-06-23 12:30:00
+```
+
+В рабочем Linux-сценарии не задавайте `QUOTES_SOURCE_PATH`: по умолчанию Go читает `/dev/itmo_quotes` раз в секунду.
+
+### 5. Android Studio и эмулятор
+
+1. Установите Android Studio.
+2. В SDK Manager установите:
+   - Android SDK Platform 34;
+   - Android SDK Build-Tools;
+   - Android SDK Platform-Tools;
+   - Android Emulator.
+3. Откройте в Android Studio каталог `ITMO.Traiding/android`, а не весь репозиторий.
+4. Если `android/local.properties` содержит чужой или Linux-путь, удалите файл. Android Studio создаст новый, например:
+
+```properties
+sdk.dir=C\:\\Users\\artem\\AppData\\Local\\Android\\Sdk
+```
+
+5. В Device Manager создайте виртуальное устройство:
+   - Phone: **Pixel 7**;
+   - System Image: **API 34**, x86_64, Google APIs;
+   - Graphics: Automatic/Hardware.
+6. Запустите gateway, затем эмулятор и нажмите Run для модуля `app`.
+
+В `BuildConfig.BASE_URL` используется `http://10.0.2.2:8080`. Для Android Emulator адрес `10.0.2.2` означает Windows-хост. Менять его на `localhost` нельзя: внутри эмулятора `localhost` указывает на сам эмулятор.
+
+Для реального Android-устройства задайте в `android/app/build.gradle.kts` IP компьютера в локальной сети, например `http://192.168.1.10:8080`, и разрешите Java/Ktor доступ через Windows Firewall.
+
+После изменения backend-кода обязательно остановите старый gateway (`Ctrl+C` в PowerShell с `:run`) и запустите `.\gradlew.bat run` заново. Иначе Android-приложение будет обращаться к старой версии API и получит `404` на новых маршрутах.
+
 ## Структура проекта
 
 ```
 ITMO.Traiding/
 ├── docker-compose.yml          # Локальный PostgreSQL + ClickHouse
+├── android/                    # Kotlin + Jetpack Compose клиент
+│   └── app/src/main/java/com/trading/android/
+│       ├── MainActivity.kt     # Экраны входа, регистрации и котировок
+│       ├── ApiClient.kt        # HTTP-клиент на OkHttp + корутины
+│       └── Quote.kt            # Модель котировки
 ├── scripts/
 │   └── integration-test.sh      # Интеграционный прогон (Compose + Go + gateway)
 ├── gateway/                    # Kotlin/Ktor веб-шлюз
@@ -35,14 +137,14 @@ ITMO.Traiding/
 │   └── README.md              # (пустой)
 ├── server/                    # Go-сервер для обработки логов
 │   ├── go/
-│   │   ├── main.go            # Чтение /quotes.log и запись в ClickHouse
+│   │   ├── main.go            # Чтение /dev/itmo_quotes и запись в ClickHouse
 │   │   ├── go.mod             # Go модули
 │   │   └── go.sum             # Зависимости
 │   └── drivers/               # Модуль ядра Linux
 │       ├── generateQuotes_kernel.c  # Исходный код модуля ядра
 │       ├── Makefile           # Сборка модуля
 │       ├── generateQuotes_kernel.ko # Скомпилированный модуль
-│       └── quotes.log         # Пример лог-файла (генерируется модулем)
+│       └── quotes.log         # Тестовый источник для запуска без Linux-драйвера
 └── README.md                  # Этот файл
 ```
 
@@ -50,14 +152,14 @@ ITMO.Traiding/
 
 ### 1. Модуль ядра Linux (`generateQuotes_kernel`)
 - **Расположение:** `server/drivers/`
-- **Назначение:** Генерирует случайные котировки и записывает их в файл `/quotes.log` в формате `название,цена,время`.
+- **Назначение:** Регистрирует символьное устройство `/dev/itmo_quotes`, генерирует массив последних котировок и отдаёт его снимок через операции `open/read/release`.
 - **Сборка:** `make all` (требуются заголовки ядра)
 - **Установка:** `sudo insmod generateQuotes_kernel.ko`
 - **Удаление:** `sudo rmmod generateQuotes_kernel`
 
 ### 2. Go-сервер (`server/go/main.go`)
 - **Расположение:** `server/go/`
-- **Назначение:** Читает **новые** строки из `/quotes.log` (сохраняется смещение в файле, чтобы не вставлять повторно одни и те же строки при каждом проходе), парсит записи и вставляет версии строк в **ClickHouse** (`ReplacingMergeTree` по полю `version`).
+- **Назначение:** Открывает `/dev/itmo_quotes`, считывает массив котировок, закрывает устройство и вставляет изменившиеся записи в **ClickHouse** (`ReplacingMergeTree` по полю `version`).
 - **Функциональность:**
   - Подключение к ClickHouse через официальный драйвер `github.com/ClickHouse/clickhouse-go/v2` (протокол native, DSN `clickhouse://`)
   - При старте создаёт БД (если не `default`) и таблицу `quotes`, если их ещё нет
@@ -123,8 +225,9 @@ CREATE TABLE users (
 | `CLICKHOUSE_DATABASE` | `default` |
 | `CLICKHOUSE_USER` | `default` |
 | `CLICKHOUSE_PASSWORD` | пусто (свой сервер); с **docker-compose.yml** из репозитория — `itmo` |
-| `QUOTES_LOG_PATH` | `/quotes.log` |
-| `PROCESS_EXISTING_AND_EXIT` | не задано: бесконечный цикл; `true` или `1`: один проход по файлу с начала и выход с кодом `0` (удобно для CI и `scripts/integration-test.sh`) |
+| `QUOTES_SOURCE_PATH` | `/dev/itmo_quotes` |
+| `QUOTES_LOG_PATH` | не задано; устаревший совместимый псевдоним для интеграционного теста |
+| `PROCESS_EXISTING_AND_EXIT` | не задано: бесконечный цикл; `true` или `1`: один снимок и выход |
 
 Для локального compose задайте `export CLICKHOUSE_PASSWORD=itmo` (или переопределите пароль в `docker-compose.yml` и в окружении). Пароль в коде не прошивается — только через переменные.
 
@@ -142,7 +245,7 @@ CREATE TABLE users (
 |------------|----------------|
 | `POSTGRES_JDBC_URL` | `jdbc:postgresql://localhost:5432/itmo_traiding_system` |
 | `POSTGRES_USER` | `postgres` |
-| `POSTGRES_PASSWORD` | `Gb%v5oVA` |
+| `POSTGRES_PASSWORD` | `postgres` |
 
 **Docker Compose** в корне задаёт для PostgreSQL пароль `postgres` и для ClickHouse — `CLICKHOUSE_PASSWORD=itmo`. Чтобы шлюз и регистрация подключались к контейнеру, задайте перед запуском gateway, например:
 
@@ -156,7 +259,7 @@ CREATE TABLE users (
 
 Скрипт [scripts/integration-test.sh](scripts/integration-test.sh) поднимает сервисы из `docker-compose.yml`, выполняет `./gradlew flywayMigrate`, очищает тестового пользователя, сбрасывает `quotes` в ClickHouse, прогоняет Go в режиме «один проход по логу», проверяет агрегаты в ClickHouse, собирает gateway и проверяет `/quotes` и `/api/register`. Ожидание ClickHouse — через `clickhouse-client` внутри контейнера (без анонимного HTTP `?query=`). Если в `PATH` нет `go`, сборка и ingest выполняются во временном контейнере `golang:1.22-bookworm` в той же Docker-сети, что и ClickHouse.
 
-Требования: Docker с Compose (см. выше), JDK 21+ в `PATH`, свободные порты `5432`, `8123`, `9000`, `8080`. **Go** нужен только для ручной разработки без Docker; для скрипта — опционально.
+Требования: Docker с Compose (см. выше), JDK 20 в `PATH`, свободные порты `5432`, `8123`, `9000`, `8080`. **Go** нужен только для ручной разработки без Docker; для скрипта — опционально.
 
 ```bash
 chmod +x scripts/integration-test.sh
@@ -180,7 +283,7 @@ export POSTGRES_PASSWORD=postgres
 - PostgreSQL 14+ (пользователи)
 - ClickHouse 24.x (котировки; см. `docker-compose.yml`)
 - Go 1.22+ (в `go.mod` указана 1.22.2)
-- Java 21+ (для Kotlin/Ktor)
+- JDK 20 (проверенная версия для Kotlin/Ktor и текущей Gradle-конфигурации)
 - Заголовки ядра Linux (для сборки модуля)
 
 ## Настройка и запуск
@@ -242,7 +345,7 @@ CREATE TABLE users (
 cd server/drivers
 make all
 sudo insmod generateQuotes_kernel.ko
-tail -f /quotes.log
+cat /dev/itmo_quotes
 ```
 
 ### 4. Запуск Go-сервера

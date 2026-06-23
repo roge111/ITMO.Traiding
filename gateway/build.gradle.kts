@@ -12,11 +12,8 @@ application {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(20)
 }
-
-// Добавьте эту строку для версии Ktor
-val ktor_version = "3.4.2"
 
 dependencies {
     implementation(ktorLibs.server.callLogging)
@@ -45,22 +42,15 @@ dependencies {
 
     // ClickHouse JDBC (котировки), транспорт HTTP
     implementation("com.clickhouse:clickhouse-jdbc:0.6.5:http")
+    implementation("org.apache.httpcomponents.client5:httpclient5:5.3.1")
+    implementation("org.apache.httpcomponents.core5:httpcore5:5.2.4")
 
     // Пул соединений (рекомендуется)
     implementation("com.zaxxer:HikariCP:5.1.0")
 
-    // Хеширование паролей
-    implementation("at.favre.lib:bcrypt:0.10.2")
-    
-    // Аутентификация и Сессии Ktor
-    implementation("io.ktor:ktor-server-auth:$ktor_version")
-    implementation("io.ktor:ktor-server-sessions:$ktor_version")
+    implementation("org.mindrot:jbcrypt:0.4")
 
-    // BCrypt для паролей
-    implementation("org.mindrot:jbcrypt:0.4")  // ← исправлено: убрана буква i
-
-    // JSON serialization for API
-    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.4.1")
 
     testImplementation(kotlin("test"))
     testImplementation(ktorLibs.server.testHost)

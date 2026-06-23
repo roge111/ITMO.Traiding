@@ -240,6 +240,24 @@ DUP_TEXT="$(echo "$DUP_BODY" | sed '$d')"
 [[ "$DUP_CODE" == "400" ]] || { log "ERROR: duplicate expected HTTP 400, got $DUP_CODE body=$DUP_TEXT"; exit 1; }
 echo "$DUP_TEXT" | grep -qi "already" || { log "ERROR: duplicate body should mention already: $DUP_TEXT"; exit 1; }
 
+log "Checking login with valid and invalid password…"
+curl -fsS -X POST "http://localhost:8080/api/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "login=${INTEGRATION_USER}" \
+  --data-urlencode "password=${INTEGRATION_PASS}" | grep -q "successful" || {
+  log "ERROR: valid login failed"
+  exit 1
+}
+INVALID_LOGIN_CODE="$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+  "http://localhost:8080/api/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "login=${INTEGRATION_USER}" \
+  --data-urlencode "password=wrong-password")"
+[[ "$INVALID_LOGIN_CODE" == "401" ]] || {
+  log "ERROR: invalid password expected HTTP 401, got $INVALID_LOGIN_CODE"
+  exit 1
+}
+
 log "SHOW TABLES (ClickHouse)…"
 dcompose exec -T clickhouse clickhouse-client --query "SHOW TABLES"
 

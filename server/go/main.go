@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"os"
@@ -14,240 +15,281 @@ import (
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 )
 
-func getenv(key, defaultVal string) string {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
-		return defaultVal
-	}
-	return v
+const quoteTimeLayout = "2006-01-02 15:04:05"
+
+type inputQuote struct {
+	name      string
+	price     int32
+	timestamp time.Time
 }
 
-func getenvPassword() string {
-	return os.Getenv("CLICKHOUSE_PASSWORD")
+func getenv(key, defaultValue string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func getenvBool(key string) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	return v == "1" || v == "true" || v == "yes"
-}
-
-func quotesLogPath() string {
-	return getenv("QUOTES_LOG_PATH", "/quotes.log")
-}
-
-func ensureSchema(db *sql.DB, database string) error {
-	if database != "" && database != "default" {
-		if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS " + quoteIdent(database)); err != nil {
-			return fmt.Errorf("create database: %w", err)
-		}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
 	}
-	fqtn := quoteIdent(database) + "." + quoteIdent("quotes")
-	ddl := fmt.Sprintf(`
-CREATE TABLE IF NOT EXISTS %s (
-    quote_name String,
-    last_cost Int32,
-    min_cost Int32,
-    max_cost Int32,
-    percentage_change Float64,
-    created_at DateTime DEFAULT now(),
-    updated_at DateTime DEFAULT now(),
-    version UInt64
-) ENGINE = ReplacingMergeTree(version)
-ORDER BY quote_name
-`, fqtn)
-	if _, err := db.Exec(ddl); err != nil {
-		return fmt.Errorf("create table: %w", err)
-	}
-	return nil
 }
 
-func quoteIdent(name string) string {
+func quoteSourcePath() string {
+	// QUOTES_LOG_PATH оставлен для совместимости с интеграционным тестом.
+	if legacyPath := strings.TrimSpace(os.Getenv("QUOTES_LOG_PATH")); legacyPath != "" {
+		return legacyPath
+	}
+	return getenv("QUOTES_SOURCE_PATH", "/dev/itmo_quotes")
+}
+
+func quoteIdentifier(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
 func openClickHouse() (*sql.DB, string, error) {
-	addr := getenv("CLICKHOUSE_ADDR", "localhost:9000")
+	address := getenv("CLICKHOUSE_ADDR", "localhost:9000")
 	database := getenv("CLICKHOUSE_DATABASE", "default")
 	user := getenv("CLICKHOUSE_USER", "default")
-	password := getenvPassword()
+	password := os.Getenv("CLICKHOUSE_PASSWORD")
 
-	u := &url.URL{
+	connectionURL := &url.URL{
 		Scheme: "clickhouse",
-		Host:   addr,
+		Host:   address,
 		Path:   "/" + database,
 	}
-	if password != "" {
-		u.User = url.UserPassword(user, password)
+	if password == "" {
+		connectionURL.User = url.User(user)
 	} else {
-		u.User = url.User(user)
+		connectionURL.User = url.UserPassword(user, password)
 	}
-	dsn := u.String()
 
-	db, err := sql.Open("clickhouse", dsn)
+	db, err := sql.Open("clickhouse", connectionURL.String())
 	if err != nil {
 		return nil, "", err
 	}
 	db.SetMaxOpenConns(4)
 
 	if err := db.Ping(); err != nil {
-		_ = db.Close()
-		return nil, "", err
+		db.Close()
+		return nil, "", fmt.Errorf("ping ClickHouse: %w", err)
 	}
 	if err := ensureSchema(db, database); err != nil {
-		_ = db.Close()
+		db.Close()
 		return nil, "", err
 	}
 	return db, database, nil
 }
 
-// processQuoteLine applies one log line to ClickHouse (insert new version).
-func processQuoteLine(db *sql.DB, tableRef, rowData string) {
-	if rowData == "" {
-		return
+func ensureSchema(db *sql.DB, database string) error {
+	if database != "default" {
+		if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS " + quoteIdentifier(database)); err != nil {
+			return fmt.Errorf("create database: %w", err)
+		}
 	}
-	dataQuote := strings.Split(rowData, ",")
-	if len(dataQuote) < 3 {
-		log.Printf("Некорректная строка: %s", rowData)
-		return
-	}
-	nameQuote := dataQuote[0]
-	price, err := strconv.Atoi(dataQuote[1])
+
+	table := quoteIdentifier(database) + "." + quoteIdentifier("quotes")
+	_, err := db.Exec(fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+			quote_name String,
+			last_cost Int32,
+			min_cost Int32,
+			max_cost Int32,
+			percentage_change Float64,
+			created_at DateTime DEFAULT now(),
+			updated_at DateTime DEFAULT now(),
+			version UInt64
+		)
+		ENGINE = ReplacingMergeTree(version)
+		ORDER BY quote_name
+	`, table))
 	if err != nil {
-		log.Printf("Ошибка конвертации цены: %v", err)
-		return
-	}
-	if _, err := time.Parse("2006-01-02 15:04:05", dataQuote[2]); err != nil {
-		log.Printf("Некорректное время в строке: %v", err)
-		return
+		return fmt.Errorf("create quotes table: %w", err)
 	}
 
-	now := time.Now().UTC()
-
-	q := `SELECT last_cost, min_cost, max_cost, created_at, version
-		FROM ` + tableRef + ` FINAL WHERE quote_name = ?`
-	rows, qerr := db.Query(q, nameQuote)
-	if qerr != nil {
-		log.Printf("Ошибка запроса ClickHouse: %v", qerr)
-		return
-	}
-	func() {
-		defer rows.Close()
-		if !rows.Next() {
-			_, ierr := db.Exec(
-				`INSERT INTO `+tableRef+` (quote_name, last_cost, min_cost, max_cost, percentage_change, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				nameQuote, int32(price), int32(price), int32(price), 0.0, now, now, uint64(1),
-			)
-			if ierr != nil {
-				log.Printf("Ошибка вставки: %v", ierr)
-			} else {
-				fmt.Printf("✅ [%s] Бумага добавлена в ClickHouse: цена=%d\n", time.Now().Format("15:04:05"), price)
-			}
-			return
-		}
-		var (
-			lastC   int32
-			minC    int32
-			maxC    int32
-			created time.Time
-			ver     uint64
+	historyTable := quoteIdentifier(database) + "." + quoteIdentifier("quotes_history")
+	_, err = db.Exec(fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+			quote_name String,
+			price Int32,
+			happened_at DateTime,
+			version UInt64
 		)
-		if scanErr := rows.Scan(&lastC, &minC, &maxC, &created, &ver); scanErr != nil {
-			log.Printf("Ошибка чтения строки: %v", scanErr)
-			return
-		}
-
-		newLast := int32(price)
-		newMin := minC
-		if int32(price) < newMin {
-			newMin = int32(price)
-		}
-		newMax := maxC
-		if int32(price) > newMax {
-			newMax = int32(price)
-		}
-		var newPct float64
-		if lastC != 0 {
-			newPct = (float64(price) - float64(lastC)) / float64(lastC) * 100
-		}
-
-		_, ierr := db.Exec(
-			`INSERT INTO `+tableRef+` (quote_name, last_cost, min_cost, max_cost, percentage_change, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			nameQuote, newLast, newMin, newMax, newPct, created, now, ver+1,
-		)
-		if ierr != nil {
-			log.Printf("Ошибка вставки версии: %v", ierr)
-		} else {
-			fmt.Printf("📈 [%s] %s обновлена: %d (%.2f%%)\n", time.Now().Format("15:04:05"), nameQuote, price, newPct)
-		}
-	}()
+		ENGINE = MergeTree()
+		ORDER BY (quote_name, happened_at, version)
+	`, historyTable))
+	if err != nil {
+		return fmt.Errorf("create quotes_history table: %w", err)
+	}
+	return nil
 }
 
-// processLogFromOffset reads from path starting at offset; returns new file offset (byte position).
-func processLogFromOffset(db *sql.DB, tableRef, path string, fromOffset int64) (int64, error) {
-	fi, statErr := os.Stat(path)
-	if statErr != nil {
-		return fromOffset, statErr
+func parseQuoteLine(line string) (inputQuote, error) {
+	parts := strings.Split(strings.TrimSpace(line), ",")
+	if len(parts) != 3 {
+		return inputQuote{}, fmt.Errorf("expected 3 fields")
 	}
-	if fi.Size() < fromOffset {
-		fromOffset = 0
+
+	name := strings.TrimSpace(parts[0])
+	if name == "" {
+		return inputQuote{}, fmt.Errorf("empty quote name")
 	}
-	file, err := os.Open(path)
+
+	price, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 32)
+	if err != nil || price <= 0 {
+		return inputQuote{}, fmt.Errorf("invalid price %q", parts[1])
+	}
+
+	timestamp, err := time.ParseInLocation(
+		quoteTimeLayout,
+		strings.TrimSpace(parts[2]),
+		time.Local,
+	)
 	if err != nil {
-		return fromOffset, err
-	}
-	defer file.Close()
-
-	if _, err := file.Seek(fromOffset, 0); err != nil {
-		return fromOffset, err
+		return inputQuote{}, fmt.Errorf("invalid timestamp: %w", err)
 	}
 
-	scanner := bufio.NewScanner(file)
+	return inputQuote{name: name, price: int32(price), timestamp: timestamp}, nil
+}
+
+// readSnapshot выполняет требуемую цепочку open -> read -> close.
+// Для символьного устройства один вызов возвращает текущий массив котировок.
+func readSnapshot(path string) ([]inputQuote, error) {
+	source, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer source.Close()
+
+	data, err := io.ReadAll(source)
+	if err != nil {
+		return nil, err
+	}
+
+	var quotes []inputQuote
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
-		processQuoteLine(db, tableRef, scanner.Text())
+		quote, parseErr := parseQuoteLine(scanner.Text())
+		if parseErr != nil {
+			log.Printf("пропущена некорректная строка %q: %v", scanner.Text(), parseErr)
+			continue
+		}
+		quotes = append(quotes, quote)
 	}
-	if err := scanner.Err(); err != nil {
-		return fromOffset, err
+	return quotes, scanner.Err()
+}
+
+func saveQuote(db *sql.DB, table string, quote inputQuote) error {
+	const selectColumns = "last_cost, min_cost, max_cost, created_at, version"
+	row := db.QueryRow(
+		"SELECT "+selectColumns+" FROM "+table+" FINAL WHERE quote_name = ?",
+		quote.name,
+	)
+
+	var (
+		lastCost int32
+		minCost  int32
+		maxCost  int32
+		created  time.Time
+		version  uint64
+	)
+	err := row.Scan(&lastCost, &minCost, &maxCost, &created, &version)
+	if err == sql.ErrNoRows {
+		_, insertErr := db.Exec(
+			"INSERT INTO "+table+" (quote_name, last_cost, min_cost, max_cost, percentage_change, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			quote.name, quote.price, quote.price, quote.price, 0.0,
+			quote.timestamp, quote.timestamp, uint64(1),
+		)
+		if insertErr != nil {
+			return insertErr
+		}
+		return saveQuoteHistory(db, quote, 1)
 	}
-	pos, err := file.Seek(0, 1)
 	if err != nil {
-		return fromOffset, err
+		return err
 	}
-	return pos, nil
+
+	newMin := minCost
+	if quote.price < newMin {
+		newMin = quote.price
+	}
+	newMax := maxCost
+	if quote.price > newMax {
+		newMax = quote.price
+	}
+	percentageChange := 0.0
+	if lastCost != 0 {
+		percentageChange = (float64(quote.price) - float64(lastCost)) / float64(lastCost) * 100
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO "+table+" (quote_name, last_cost, min_cost, max_cost, percentage_change, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		quote.name, quote.price, newMin, newMax, percentageChange,
+		created, quote.timestamp, version+1,
+	)
+	if err != nil {
+		return err
+	}
+	return saveQuoteHistory(db, quote, version+1)
+}
+
+func saveQuoteHistory(db *sql.DB, quote inputQuote, version uint64) error {
+	_, err := db.Exec(
+		"INSERT INTO quotes_history (quote_name, price, happened_at, version) VALUES (?, ?, ?, ?)",
+		quote.name, quote.price, quote.timestamp, version,
+	)
+	return err
+}
+
+func processSnapshot(
+	db *sql.DB,
+	table string,
+	quotes []inputQuote,
+	seen map[string]string,
+) {
+	for _, quote := range quotes {
+		signature := fmt.Sprintf("%d@%d", quote.price, quote.timestamp.Unix())
+		if seen[quote.name] == signature {
+			continue
+		}
+		if err := saveQuote(db, table, quote); err != nil {
+			log.Printf("не удалось сохранить %s: %v", quote.name, err)
+			continue
+		}
+		seen[quote.name] = signature
+		log.Printf("%s: price=%d", quote.name, quote.price)
+	}
 }
 
 func main() {
 	db, database, err := openClickHouse()
 	if err != nil {
-		log.Fatal("❌ Ошибка подключения к ClickHouse:", err)
+		log.Fatal("ошибка подключения к ClickHouse: ", err)
 	}
 	defer db.Close()
 
-	fmt.Println("✅ Успешное подключение к ClickHouse!")
+	sourcePath := quoteSourcePath()
+	table := quoteIdentifier(database) + "." + quoteIdentifier("quotes")
+	seen := make(map[string]string)
 
-	tableRef := quoteIdent(database) + "." + quoteIdent("quotes")
-	logPath := quotesLogPath()
-
-	if getenvBool("PROCESS_EXISTING_AND_EXIT") {
-		_, err := processLogFromOffset(db, tableRef, logPath, 0)
-		if err != nil {
-			log.Fatalf("ошибка обработки лога %s: %v", logPath, err)
-		}
-		os.Exit(0)
-	}
-
-	var logOffset int64
 	for {
-		newOff, err := processLogFromOffset(db, tableRef, logPath, logOffset)
-		if err != nil {
-			if os.IsNotExist(err) {
-				log.Printf("Файл %s не найден, повтор через 5 с: %v", logPath, err)
-			} else {
-				log.Printf("Ошибка обработки %s: %v, повтор через 5 с", logPath, err)
-			}
-			time.Sleep(5 * time.Second)
-			continue
+		quotes, readErr := readSnapshot(sourcePath)
+		if readErr != nil {
+			log.Printf("не удалось прочитать %s: %v", sourcePath, readErr)
+		} else {
+			processSnapshot(db, table, quotes, seen)
 		}
-		logOffset = newOff
-		time.Sleep(1 * time.Second)
+
+		if getenvBool("PROCESS_EXISTING_AND_EXIT") {
+			if readErr != nil {
+				os.Exit(1)
+			}
+			return
+		}
+		time.Sleep(time.Second)
 	}
 }

@@ -3,12 +3,8 @@ package com.trading.quotes
 import com.trading.database.ClickHouseManager
 
 object QuoteRepository {
-    private val quotes = mutableListOf<Quote>()
-
-    fun getAll(): List<Quote> = quotes.toList()
-
     fun getQuotesDB(): List<Quote> {
-        quotes.clear()
+        val quotes = mutableListOf<Quote>()
         val sql = """
             SELECT
                 quote_name,
@@ -38,6 +34,6 @@ object QuoteRepository {
                 }
             }
         }
-        return quotes.toList()
+        return quotes
     }
 }

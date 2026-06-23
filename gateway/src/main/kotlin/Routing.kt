@@ -6,10 +6,11 @@ import io.ktor.server.routing.*
 import io.ktor.http.ContentType
 
 import com.trading.quotes.quotesAsTable 
-import com.trading.quotes.Quote
 import com.trading.quotes.QuoteRepository
+import com.trading.trading.tradingRoutes
 
 fun Application.configureRouting() {
+    tradingRoutes()
     routing {
         get("/quotes") {
             val quotes = QuoteRepository.getQuotesDB()

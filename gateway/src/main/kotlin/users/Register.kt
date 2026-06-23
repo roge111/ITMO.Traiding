@@ -12,6 +12,12 @@ class Register {
     }
 
     fun register(login: String, password: String): String {
+        if (login.length !in 3..50) {
+            return "Login must contain from 3 to 50 characters."
+        }
+        if (password.length < 6) {
+            return "Password must contain at least 6 characters."
+        }
         if (checkUser(login)) {
             return "The user is already registered."
         }
@@ -19,8 +25,8 @@ class Register {
         val hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt())
         
         db.execute(
-            "INSERT INTO users (username, password_hash, balance) VALUES (?, ?, ?)",
-            login, hashedPassword, 0
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            login, hashedPassword
         )
 
         return "User registered successfully."
@@ -28,10 +34,12 @@ class Register {
 
     fun checkUser(username: String): Boolean {
         return try {
-            val rs = db.query("SELECT 1 FROM users WHERE username = ? LIMIT 1", username)
-            val exists = rs.next()
-            rs.close()
-            exists
+            db.getConnection().prepareStatement(
+                "SELECT 1 FROM users WHERE username = ? LIMIT 1"
+            ).use { statement ->
+                statement.setString(1, username)
+                statement.executeQuery().use { result -> result.next() }
+            }
         } catch (e: Exception) {
             println("Ошибка при проверке пользователя: ${e.message}")
             false

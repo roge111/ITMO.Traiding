@@ -13,7 +13,7 @@ class DataBaseManager {
         val url = System.getenv("POSTGRES_JDBC_URL")?.takeIf { it.isNotBlank() }
             ?: "jdbc:postgresql://localhost:5432/itmo_traiding_system"
         val user = System.getenv("POSTGRES_USER")?.takeIf { it.isNotBlank() } ?: "postgres"
-        val password = System.getenv("POSTGRES_PASSWORD") ?: "Gb%v5oVA"
+        val password = System.getenv("POSTGRES_PASSWORD") ?: "postgres"
 
         PostgresMigrationRunner.ensureMigrated(url, user, password)
         connection = DriverManager.getConnection(url, user, password)

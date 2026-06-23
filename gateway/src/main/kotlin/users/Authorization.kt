@@ -11,25 +11,20 @@ class Authorization {
         db.connect()
     }
 
-    fun authorization (login: String, password: String): Boolean {
-         val hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt())
-
-        if (checkUser(login, hashedPassword)) {
-            return true
-        } else {
-            return false
-        }
-         
+    fun authorization(login: String, password: String): Boolean {
+        return checkUser(login, password)
     }
 
-        fun checkUser(username: String, hashedPassword: String): Boolean {
+    private fun checkUser(username: String, password: String): Boolean {
         return try {
-            val rs = db.query("SELECT 1 FROM users WHERE username = ? AND password_hash = ? LIMIT 1", username, hashedPassword)
-            val exists = rs.next()
-            println("Пользователь $username найден")
-            rs.close()
-            exists
-            true
+            db.getConnection().prepareStatement(
+                "SELECT password_hash FROM users WHERE username = ? LIMIT 1"
+            ).use { statement ->
+                statement.setString(1, username)
+                statement.executeQuery().use { result ->
+                    result.next() && BCrypt.checkpw(password, result.getString("password_hash"))
+                }
+            }
         } catch (e: Exception) {
             println("Ошибка при проверке пользователя: ${e.message}")
             false

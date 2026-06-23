@@ -1,1 +1,0 @@
-./generateQuotes_kernel.o
