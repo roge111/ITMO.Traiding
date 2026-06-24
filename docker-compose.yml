@@ -10,6 +10,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
@@ -22,6 +27,63 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  go-server:
+    build:
+      context: ./server/go
+    container_name: itmo-trading-go
+    environment:
+      CLICKHOUSE_ADDR: clickhouse:9000
+      CLICKHOUSE_PASSWORD: itmo
+      QUOTES_SOURCE_PATH: /dev/itmo_quotes
+    devices:
+      - /dev/itmo_quotes:/dev/itmo_quotes
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  flyway:
+    image: flyway/flyway:10
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/itmo_traiding_system
+      FLYWAY_USER: postgres
+      FLYWAY_PASSWORD: postgres
+      FLYWAY_BASELINE_ON_MIGRATE: "true"
+      FLYWAY_BASELINE_VERSION: "0"
+    volumes:
+      - ./gateway/src/main/resources/db/migration:/flyway/sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: ./gateway
+    container_name: itmo-trading-gateway
+    environment:
+      POSTGRES_JDBC_URL: jdbc:postgresql://postgres:5432/itmo_traiding_system
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      CLICKHOUSE_JDBC_URL: jdbc:clickhouse://clickhouse:8123/default
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: itmo
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
 volumes:
   postgres_data:
