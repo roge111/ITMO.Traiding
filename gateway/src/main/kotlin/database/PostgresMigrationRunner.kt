@@ -9,11 +9,14 @@ import org.flywaydb.core.Flyway
 object PostgresMigrationRunner {
 
     fun ensureMigrated(jdbcUrl: String, user: String, password: String) {
+        val locations = System.getenv("FLYWAY_LOCATIONS")
+            ?.split(",")?.map { it.trim() }?.toTypedArray()
+            ?: arrayOf("classpath:db/migration")
         Flyway.configure()
             .dataSource(jdbcUrl, user, password)
-            .locations("classpath:db/migration")
-            .baselineOnMigrate(true)  // <-- Добавить эту строку!
-            .ignoreMigrationPatterns("*:missing")
+            .locations(*locations)
+            .baselineOnMigrate(true)
+            .baselineVersion("0")
             .load()
             .migrate()
     }

@@ -99,6 +99,102 @@ sdk.dir=C\:\\Users\\artem\\AppData\\Local\\Android\\Sdk
 
 После изменения backend-кода обязательно остановите старый gateway (`Ctrl+C` в PowerShell с `:run`) и запустите `.\gradlew.bat run` заново. Иначе Android-приложение будет обращаться к старой версии API и получит `404` на новых маршрутах.
 
+## Запуск на Ubuntu-сервере (с реальным драйвером)
+
+Полный production-like запуск: ядерный модуль на хосте, все сервисы в Docker Compose.
+
+### 1. Подготовка сервера
+
+```bash
+# Обновить пакеты
+sudo apt update && sudo apt upgrade -y
+
+# Установить Docker
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Установить инструменты сборки и заголовки текущего ядра
+sudo apt install -y build-essential linux-headers-$(uname -r) git
+```
+
+### 2. Скопировать проект на сервер
+
+```bash
+# Вариант А — через git
+git clone <repo-url> ~/itmo-trading
+cd ~/itmo-trading
+
+# Вариант Б — scp с локальной машины
+scp -r /path/to/ITMO.Traiding user@<server-ip>:~/itmo-trading
+```
+
+### 3. Собрать и загрузить ядерный модуль
+
+```bash
+cd ~/itmo-trading/server/drivers
+
+# Собрать модуль под текущее ядро
+make all
+
+# Загрузить
+sudo insmod generateQuotes_kernel.ko
+
+# Проверить, что устройство появилось
+ls -la /dev/itmo_quotes
+sudo dmesg | tail -3   # ожидается: itmo_quotes: device /dev/itmo_quotes registered
+```
+
+**Автозагрузка после перезагрузки сервера:**
+
+```bash
+sudo cp generateQuotes_kernel.ko /lib/modules/$(uname -r)/extra/
+sudo depmod
+echo "generateQuotes_kernel" | sudo tee /etc/modules-load.d/itmo-quotes.conf
+```
+
+### 4. Запустить Docker Compose
+
+```bash
+cd ~/itmo-trading
+
+# Собрать образы и поднять все сервисы
+docker compose up -d --build
+
+# Проверить статус
+docker compose ps
+docker logs itmo-trading-go --tail 20     # котировки каждые ~3 сек
+docker logs itmo-trading-gateway --tail 5
+```
+
+Go-сервер читает `/dev/itmo_quotes` напрямую через `devices:` mount — без промежуточного файла.
+
+### 5. Проверить работу
+
+```bash
+# Зарегистрировать пользователя
+curl -X POST http://localhost:8080/api/register \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "login=testuser&password=password123"
+
+# Получить котировки
+curl http://localhost:8080/api/quotes
+```
+
+### Схема работы на Ubuntu
+
+```
+generateQuotes_kernel.ko  →  /dev/itmo_quotes  (char device на хосте)
+         ↓  devices: mount
+   go-server контейнер читает /dev/itmo_quotes каждую секунду
+         ↓
+      ClickHouse  →  gateway  →  /api/quotes
+```
+
+Модуль обновляет один случайный тикер из семи (GAZ, YANDEX, SBER, LUKOIL, ROSNEFT, VTBR, MOEX) каждые 3 секунды.
+
+> **macOS / Windows:** ядерный модуль не поддерживается — контейнеры не разделяют ядро хоста. Для локальной разработки используйте секцию «Быстрый запуск на Windows» или подайте в `QUOTES_SOURCE_PATH` обычный файл `server/drivers/quotes.log`.
+
 ## Структура проекта
 
 ```
